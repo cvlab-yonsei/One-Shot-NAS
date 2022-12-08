@@ -1,0 +1,5 @@
+torch
+torchvision
+
+nats_bench>=1.4
+nas_201_api

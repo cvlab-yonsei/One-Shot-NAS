@@ -30,7 +30,7 @@ import scipy.stats as stats
 sys.path.insert(0, 'exps/NAS-Bench-201-algos/')
 from utils.LR_scheduler import *
 
-parser = argparse.ArgumentParser(description="RSPS_MY")
+parser = argparse.ArgumentParser(description="Random-NAS_Adpative_LR")
 parser.add_argument('--log_dir', type=str, default='logs/tmp')
 parser.add_argument('--file_name', type=str, default='tmp')
 parser.add_argument('--epochs', type=int, default=250)

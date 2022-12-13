@@ -30,10 +30,12 @@ import scipy.stats as stats
 sys.path.insert(0, 'exps/NAS-Bench-201-algos/')
 from utils.LR_scheduler import *
 
-parser = argparse.ArgumentParser(description="Random-NAS_Adpative_LR")
+parser = argparse.ArgumentParser(description="RSPS_MY")
 parser.add_argument('--log_dir', type=str, default='logs/tmp')
 parser.add_argument('--file_name', type=str, default='tmp')
 parser.add_argument('--epochs', type=int, default=250)
+parser.add_argument('--max_coeff', type=float, default=5.0)
+parser.add_argument('--eta_min', type=float, default=0)
 args = parser.parse_args()
 
 
@@ -76,7 +78,7 @@ search_model = get_cell_based_tiny_net(model_config)
 supernet = get_cell_based_tiny_net(supernet_config)
 supernet = supernet.cuda()
 
-HighParamOptim = torch.optim.SGD(
+optimizer = torch.optim.SGD(
     params = search_model.parameters(),
     lr = 0.025,
     momentum = 0.9,
@@ -84,40 +86,12 @@ HighParamOptim = torch.optim.SGD(
     nesterov = True 
 )
 
-MidParamOptim = torch.optim.SGD(
-    params = search_model.parameters(),
-    lr = 0.025,
-    momentum = 0.9,
-    weight_decay = 0.0005,
-    nesterov = True 
-)
-
-LowParamOptim = torch.optim.SGD(
-    params = search_model.parameters(),
-    lr = 0.025,
-    momentum = 0.9,
-    weight_decay = 0.0005,
-    nesterov = True 
-)
-
-
-HighParamScheduler = logSchedule1(
-    optimizer = HighParamOptim,
+scheduler = AdaptiveParamSchedule(
+    optimizer = optimizer,
     epochs = epochs,
-    eta_min = 0
+    eta_min = args.eta_min
 )
 
-MidParamScheduler = MidParamSchedule(
-    optimizer = MidParamOptim,
-    epochs = epochs,
-    eta_min = 0
-)
-
-LowParamScheduler = expSchedule1(
-    optimizer = LowParamOptim,
-    epochs = epochs,
-    eta_min = 0
-)
 
 criterion = torch.nn.CrossEntropyLoss()
 
@@ -235,6 +209,16 @@ import pickle
 with open("./exps/NAS-Bench-201-algos/kendal_valid_accs/num_params.pkl","rb") as f:
     num_params = pickle.load(f)   
     
+with open("./exps/NAS-Bench-201-algos/kendal_valid_accs/cifar10_accs.pkl","rb") as f:
+    cifar10_accs = pickle.load(f)    
+
+min_param = min(num_params)
+max_param = max(num_params)
+mid_param = (min_param + max_param)/2
+max_coeff = args.max_coeff
+def get_LR_exp_coeff(num_param):
+    return (1/max_coeff - max_coeff) / (np.log(max_param) - np.log(min_param)) * (np.log(num_param) - np.log(min_param)) + max_coeff
+
 arch_repeat = 0
 for ep in range(epochs):
     network.train()
@@ -246,36 +230,28 @@ for ep in range(epochs):
 
        
         net_num = random.randrange(15625)
+    
         network.arch_cache = genotype(struc[net_num])
+        
 #         result = api.query_by_arch(arch, '200')
 #         result = result.split('\n')
 #         cifar10 = result[2].split(' ')
 
 #         num_param = float(cifar10[-4].strip('Params='))
-        HighParamOptim.zero_grad()
-        MidParamOptim.zero_grad()
-        LowParamOptim.zero_grad()
+        num_param = num_params[net_num]
+        scheduler.exp_coeff = get_LR_exp_coeff(num_param)
+        scheduler.cur_ep = ep
+        scheduler.step()
         
-        if num_params[net_num] < 0.316:
-            _, pred = network(input)
-            loss = criterion(pred, label)
-            loss.backward()
-            nn.utils.clip_grad_norm_(network.parameters(), 5)
-            LowParamOptim.step()
+        optimizer.zero_grad()
+        
+        
+        _, pred = network(input)
+        loss = criterion(pred, label)
+        loss.backward()
+        nn.utils.clip_grad_norm_(network.parameters(), 5)
+        optimizer.step()
 
-        elif num_params[net_num] < 0.559:
-            _, pred = network(input)
-            loss = criterion(pred, label)
-            loss.backward()
-            nn.utils.clip_grad_norm_(network.parameters(), 5)
-            MidParamOptim.step()
-
-        else:
-            _, pred = network(input)
-            loss = criterion(pred, label)
-            loss.backward()
-            nn.utils.clip_grad_norm_(network.parameters(), 5)
-            HighParamOptim.step()
 
 
         
@@ -295,12 +271,8 @@ for ep in range(epochs):
         # print(arch)
     print(f'ep: {ep}, top1: {base_prec1}')
 
-    HighParamScheduler.step()
-    MidParamScheduler.step()
-    LowParamScheduler.step()
-    writer.add_scalar('LR/HighParamLR', HighParamOptim.param_groups[0]['lr'], ep)
-    writer.add_scalar('LR/MidParamLR', MidParamOptim.param_groups[0]['lr'], ep)
-    writer.add_scalar('LR/LowParamLR', LowParamOptim.param_groups[0]['lr'], ep)
+
+    writer.add_scalar('LR/AdaptiveLR', optimizer.param_groups[0]['lr'], ep)
     
 torch.save(network.state_dict(), os.path.join(args.log_dir, 'final_network.pth'))    
 

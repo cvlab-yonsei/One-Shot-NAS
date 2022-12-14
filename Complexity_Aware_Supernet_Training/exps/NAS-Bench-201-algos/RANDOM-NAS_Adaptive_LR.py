@@ -60,23 +60,10 @@ model_config = dict2config(
     None,
 )
 
-supernet_config = dict2config(
-    {
-        "name": "supernet",
-        "C": 16,
-        "N": 5,
-        "max_nodes": 4,
-        "num_classes": 10,
-        "space": search_space,
-        "affine": False,
-        "track_running_stats": bool(0),
-    },
-    None,
 )
 
 search_model = get_cell_based_tiny_net(model_config)
-supernet = get_cell_based_tiny_net(supernet_config)
-supernet = supernet.cuda()
+
 
 optimizer = torch.optim.SGD(
     params = search_model.parameters(),
@@ -100,20 +87,18 @@ criterion = torch.nn.CrossEntropyLoss()
 network = search_model.cuda()
 criterion = criterion.cuda()
 
-train_data, valid_data, _, _ = get_datasets( # train_data: trainset, valid_data: testset
+train_data, valid_data, _, _ = get_datasets( 
         'cifar10', './dataset', -1
     )
 
-search_loader, _, valid_loader = get_nas_search_loaders( # search loader 는 train set + valid set
-        train_data,                                      # train_loader 는 train set
-        valid_data,                                      # valid_loader 는 valid set (cifar10 기준)
+search_loader, _, valid_loader = get_nas_search_loaders( 
+        train_data,                                     
+        valid_data,                                      
         'cifar10',
         "configs/nas-benchmark/",
-        (64, 256), # 페이퍼는 256 코드는 512로 구현해놨음.
+        (64, 256), 
         4,
     )
-
-# logger.log(f'search_loader_num: {len(search_loader)}, valid_loader_num: {len(valid_loader)}')
 
 total_iter = 0
 
@@ -159,8 +144,7 @@ arch = Structure(genotypes)
 
 edge2index = network.edge2index
 max_nodes = 4
-def genotype(enc): # upon calling, the caller should pass the "theta" into this object as "alpha" first
-#     theta = torch.softmax(_arch_parameters, dim=-1) * enc
+def genotype(enc): 
     theta = enc
     genotypes = []
     for i in range(1, max_nodes):
@@ -311,15 +295,7 @@ for i in range(len(struc)):
 
     print(f'=============={i}==============')
     print(f'valid_acc: {valid_acc}')
-#     result = api.query_by_arch(genotype(struc[i]), '200')
-#     cifar10_train, cifar10_test, cifar100_train, cifar100_valid, \
-#         cifar100_test, imagenet_train, imagenet_valid, imagenet_test = distill(result)
-    
-    
-#     num_params.append(get_num_params(result))
-#     cifar10_accs.append(cifar10_test)
-#     cifar100_accs.append(cifar100_test)
-#     imagenet_accs.append(imagenet_test)
+
 
 import pickle
 

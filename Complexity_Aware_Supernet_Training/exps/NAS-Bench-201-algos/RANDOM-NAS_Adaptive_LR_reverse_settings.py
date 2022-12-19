@@ -94,25 +94,25 @@ scheduler = AdaptiveParamSchedule(
 
 criterion = torch.nn.CrossEntropyLoss()
 
-# api = API('nasbench201/NAS-Bench-201-v1_1-096897.pth')
+
 
 network = search_model.cuda()
 criterion = criterion.cuda()
 
-train_data, valid_data, _, _ = get_datasets( # train_data: trainset, valid_data: testset
+train_data, valid_data, _, _ = get_datasets( 
         'cifar10', './dataset', -1
     )
 
-search_loader, _, valid_loader = get_nas_search_loaders( # search loader 는 train set + valid set
-        train_data,                                      # train_loader 는 train set
-        valid_data,                                      # valid_loader 는 valid set (cifar10 기준)
+search_loader, _, valid_loader = get_nas_search_loaders( 
+        train_data,                                      
+        valid_data,                                      
         'cifar10',
         "configs/nas-benchmark/",
-        (64, 256), # 페이퍼는 256 코드는 512로 구현해놨음.
+        (64, 256),
         4,
     )
 
-# logger.log(f'search_loader_num: {len(search_loader)}, valid_loader_num: {len(valid_loader)}')
+
 
 total_iter = 0
 
@@ -120,7 +120,7 @@ def search_find_best(xloader, network, n_samples):
     with torch.no_grad():
         network.eval()
         archs, valid_accs = [], []
-        # print ('obtain the top-{:} architectures'.format(n_samples))
+       
         loader_iter = iter(xloader)
         for i in range(n_samples):
             arch = network.random_genotype(True)
@@ -158,8 +158,7 @@ arch = Structure(genotypes)
 
 edge2index = network.edge2index
 max_nodes = 4
-def genotype(enc): # upon calling, the caller should pass the "theta" into this object as "alpha" first
-#     theta = torch.softmax(_arch_parameters, dim=-1) * enc
+def genotype(enc): 
     theta = enc
     genotypes = []
     for i in range(1, max_nodes):
@@ -227,11 +226,7 @@ for ep in range(epochs):
        
         net_num = random.randrange(15625)
         network.arch_cache = genotype(struc[net_num])
-#         result = api.query_by_arch(arch, '200')
-#         result = result.split('\n')
-#         cifar10 = result[2].split(' ')
 
-#         num_param = float(cifar10[-4].strip('Params='))
         num_param = num_params[net_num]
         scheduler.exp_coeff = get_LR_exp_coeff(num_param)
         scheduler.cur_ep = ep
@@ -259,10 +254,7 @@ for ep in range(epochs):
         writer.add_scalar('train/subnet_top1', base_prec1, total_iter)
         writer.add_scalar('train/subnet_top5', base_prec5, total_iter)
         total_iter += 1
-#         arch_repeat = arch_repeat - 1
 
-        # print(f'num_param: {num_param}, arch_repeat: {arch_repeat}')
-        # print(arch)
     print(f'ep: {ep}, top1: {base_prec1}')
 
 
@@ -305,15 +297,7 @@ for i in range(len(struc)):
 
     print(f'=============={i}==============')
     print(f'valid_acc: {valid_acc}')
-#     result = api.query_by_arch(genotype(struc[i]), '200')
-#     cifar10_train, cifar10_test, cifar100_train, cifar100_valid, \
-#         cifar100_test, imagenet_train, imagenet_valid, imagenet_test = distill(result)
-    
-    
-#     num_params.append(get_num_params(result))
-#     cifar10_accs.append(cifar10_test)
-#     cifar100_accs.append(cifar100_test)
-#     imagenet_accs.append(imagenet_test)
+
 
 import pickle
 

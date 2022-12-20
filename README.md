@@ -1,4 +1,5 @@
 # Complexity Aware Supernet Training for One-Shot NAS
+Implementation of Complexity Aware Supernet Training for One-Shot NAS. 
 
 ## Pre-requisites
 This repository has been tested with the following libraries:

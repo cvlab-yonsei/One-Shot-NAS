@@ -17,5 +17,5 @@ Please refer to [AutoDL-Projects](https://github.com/D-X-Y/AutoDL-Projects/blob/
 
 ## Acknowledgements
 Our codes are partly based on the following repositories.
-- [AutoDL] (https://github.com/D-X-Y/AutoDL-Projects)
-- [GM-NAS] (https://github.com/skhu101/GM-NAS)
+- [AutoDL](https://github.com/D-X-Y/AutoDL-Projects)
+- [GM-NAS](https://github.com/skhu101/GM-NAS)

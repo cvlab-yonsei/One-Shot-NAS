@@ -13,4 +13,4 @@ This repository has been tested with the following libraries:
 pip install nas-bench-201
 ```
 
-Please refer to ['AutoDL-Projects'](https://github.com/D-X-Y/AutoDL-Projects/blob/main/docs/NAS-Bench-201.md) for more details.
+Please refer to [AutoDL-Projects](https://github.com/D-X-Y/AutoDL-Projects/blob/main/docs/NAS-Bench-201.md) for more details.

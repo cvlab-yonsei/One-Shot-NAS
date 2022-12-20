@@ -14,3 +14,8 @@ pip install nas-bench-201
 ```
 
 Please refer to [AutoDL-Projects](https://github.com/D-X-Y/AutoDL-Projects/blob/main/docs/NAS-Bench-201.md) for more details.
+
+## Acknowledgements
+Our codes are partly based on the following repositories.
+- [AutoDL] (https://github.com/D-X-Y/AutoDL-Projects)
+- [GM-NAS] (https://github.com/skhu101/GM-NAS)

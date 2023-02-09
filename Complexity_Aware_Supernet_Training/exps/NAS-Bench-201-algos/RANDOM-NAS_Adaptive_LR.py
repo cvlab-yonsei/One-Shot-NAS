@@ -26,6 +26,7 @@ from xautodl.log_utils import AverageMeter, time_string, convert_secs2time
 from xautodl.models import get_cell_based_tiny_net, get_search_spaces
 from nas_201_api import NASBench201API as API
 import scipy.stats as stats
+import matplotlib.pyplot as plt
 
 sys.path.insert(0, 'exps/NAS-Bench-201-algos/')
 from utils.LR_scheduler import *
@@ -35,11 +36,17 @@ parser.add_argument('--log_dir', type=str, default='logs/tmp')
 parser.add_argument('--file_name', type=str, default='tmp')
 parser.add_argument('--epochs', type=int, default=250)
 parser.add_argument('--max_coeff', type=float, default=3.0)
+parser.add_argument('--lr', type=float, default=0.025)
 parser.add_argument('--eta_min', type=float, default=0)
 args = parser.parse_args()
-
+arg_dict = vars(args)
+for k, v in arg_dict.items():
+    print("{}: {}".format(k,v), end='\t')
 
 os.chdir('../../')
+
+args.log_dir += f'_ep_{args.epochs}'
+args.file_name += f'_ep_{args.epochs}'
 
 file_name = args.file_name
 epochs = args.epochs
@@ -60,14 +67,27 @@ model_config = dict2config(
     None,
 )
 
+supernet_config = dict2config(
+    {
+        "name": "supernet",
+        "C": 16,
+        "N": 5,
+        "max_nodes": 4,
+        "num_classes": 10,
+        "space": search_space,
+        "affine": False,
+        "track_running_stats": bool(0),
+    },
+    None,
 )
 
 search_model = get_cell_based_tiny_net(model_config)
-
+supernet = get_cell_based_tiny_net(supernet_config)
+supernet = supernet.cuda()
 
 optimizer = torch.optim.SGD(
     params = search_model.parameters(),
-    lr = 0.025,
+    lr = args.lr,
     momentum = 0.9,
     weight_decay = 0.0005,
     nesterov = True 
@@ -75,7 +95,7 @@ optimizer = torch.optim.SGD(
 
 scheduler = AdaptiveParamSchedule(
     optimizer = optimizer,
-    epochs = epochs,
+    epochs = args.epochs * 391,
     eta_min = args.eta_min
 )
 
@@ -87,18 +107,20 @@ criterion = torch.nn.CrossEntropyLoss()
 network = search_model.cuda()
 criterion = criterion.cuda()
 
-train_data, valid_data, _, _ = get_datasets( 
+train_data, valid_data, _, _ = get_datasets( # train_data: trainset, valid_data: testset
         'cifar10', './dataset', -1
     )
 
-search_loader, _, valid_loader = get_nas_search_loaders( 
-        train_data,                                     
-        valid_data,                                      
+search_loader, _, valid_loader = get_nas_search_loaders( # search loader 는 train set + valid set
+        train_data,                                      # train_loader 는 train set
+        valid_data,                                      # valid_loader 는 valid set (cifar10 기준)
         'cifar10',
         "configs/nas-benchmark/",
-        (64, 256), 
+        (64, 256), # 페이퍼는 256 코드는 512로 구현해놨음.
         4,
     )
+
+# logger.log(f'search_loader_num: {len(search_loader)}, valid_loader_num: {len(valid_loader)}')
 
 total_iter = 0
 
@@ -144,7 +166,8 @@ arch = Structure(genotypes)
 
 edge2index = network.edge2index
 max_nodes = 4
-def genotype(enc): 
+def genotype(enc): # upon calling, the caller should pass the "theta" into this object as "alpha" first
+#     theta = torch.softmax(_arch_parameters, dim=-1) * enc
     theta = enc
     genotypes = []
     for i in range(1, max_nodes):
@@ -190,12 +213,23 @@ for i in range(5):
     base[0] = 0
 
 import pickle
-with open("./exps/NAS-Bench-201-algos/kendal_valid_accs/num_params.pkl","rb") as f:
-    num_params = pickle.load(f)   
-    
+
 with open("./exps/NAS-Bench-201-algos/kendal_valid_accs/cifar10_accs.pkl","rb") as f:
     cifar10_accs = pickle.load(f)    
 
+with open("./exps/NAS-Bench-201-algos/kendal_valid_accs/cifar100_accs.pkl","rb") as f:
+    cifar100_accs = pickle.load(f)    
+
+with open("./exps/NAS-Bench-201-algos/kendal_valid_accs/imagenet_accs.pkl","rb") as f:
+    imagenet_accs = pickle.load(f)  
+    
+with open("./exps/NAS-Bench-201-algos/kendal_valid_accs/num_params.pkl","rb") as f:
+    num_params = pickle.load(f)    
+    
+with open("./exps/NAS-Bench-201-algos/kendal_320/kendal_320_idx.pkl","rb") as f:
+    eval_arch_list = pickle.load(f)   
+    
+    
 min_param = min(num_params)
 max_param = max(num_params)
 mid_param = (min_param + max_param)/2
@@ -224,7 +258,7 @@ for ep in range(epochs):
 #         num_param = float(cifar10[-4].strip('Params='))
         num_param = num_params[net_num]
         scheduler.exp_coeff = get_LR_exp_coeff(num_param)
-        scheduler.cur_ep = ep
+        scheduler.cur_ep = total_iter
         scheduler.step()
         
         optimizer.zero_grad()
@@ -235,9 +269,6 @@ for ep in range(epochs):
         loss.backward()
         nn.utils.clip_grad_norm_(network.parameters(), 5)
         optimizer.step()
-
-
-
         
 
         writer.add_scalar('train/subnet_loss', loss.item(), total_iter)
@@ -265,15 +296,15 @@ torch.save(network.state_dict(), os.path.join(args.log_dir, 'final_network.pth')
     
 
 
-print('================Kendall tau Start================')
+print('================Kendall tau 320 Start================')
 loader_iter = iter(valid_loader)
 valid_accs = []
-cifar10_accs = []
-cifar100_accs = []
-imagenet_accs = []
-num_params = []
+# cifar10_accs = []
+# cifar100_accs = []
+# imagenet_accs = []
+# num_params = []
 
-for i in range(len(struc)):        
+for i in eval_arch_list:        
     network.arch_cache = genotype(struc[i])
     with torch.no_grad():
         network.eval()
@@ -293,14 +324,68 @@ for i in range(len(struc)):
 
         valid_accs.append(valid_acc)
 
-    print(f'=============={i}==============')
-    print(f'valid_acc: {valid_acc}')
+    print(f'arch_{i}_valid_acc: {valid_acc}')
 
+print('================Kendall tau 320 End================')
 
 import pickle
 
-with open(f"./exps/NAS-Bench-201-algos/kendal_valid_accs/{file_name}.pkl","wb") as f:
+with open(f"./exps/NAS-Bench-201-algos/kendal_320/{file_name}.pkl","wb") as f:
     pickle.dump(valid_accs, f)    
+    
+
+with open("./exps/NAS-Bench-201-algos/kendal_valid_accs/cifar10_accs.pkl","rb") as f:
+    cifar10_accs = pickle.load(f)    
+
+with open("./exps/NAS-Bench-201-algos/kendal_valid_accs/cifar100_accs.pkl","rb") as f:
+    cifar100_accs = pickle.load(f)    
+
+with open("./exps/NAS-Bench-201-algos/kendal_valid_accs/imagenet_accs.pkl","rb") as f:
+    imagenet_accs = pickle.load(f)
+    
+cifar10_valid_true_tau, _ = stats.kendalltau(np.array(valid_accs), np.array(cifar10_accs)[eval_arch_list])     
+cifar100_valid_true_tau, _ = stats.kendalltau(np.array(valid_accs), np.array(cifar100_accs)[eval_arch_list])   
+imagenet_valid_true_tau, _ = stats.kendalltau(np.array(valid_accs), np.array(imagenet_accs)[eval_arch_list]) 
+
+
+print(f'cifar10_valid_true_tau: {cifar10_valid_true_tau}')
+print(f'cifar100_valid_true_tau: {cifar100_valid_true_tau}')
+print(f'imagenet_valid_true_tau: {imagenet_valid_true_tau}')
+
+writer.add_scalar('Kendall_320/cifar10', cifar10_valid_true_tau, total_iter)
+writer.add_scalar('Kendall_320/cifar100', cifar100_valid_true_tau, total_iter)
+writer.add_scalar('Kendall_320/imagenet', imagenet_valid_true_tau, total_iter)
+
+low_param_val = 0.317
+high_param_val = 0.316
+
+low_param = []
+low_param_valid = []
+low_param_real = []
+
+for i in range(len(np.array(num_params)[eval_arch_list])):
+    if np.array(num_params)[eval_arch_list][i] < float(low_param_val):
+        low_param.append(np.array(num_params)[eval_arch_list][i])
+        low_param_valid.append(np.array(valid_accs)[i])
+        low_param_real.append(np.array(cifar10_accs)[eval_arch_list][i])
+
+print(f'low_param_kendal: {stats.kendalltau(low_param_valid, low_param_real)}')
+
+high_param = []
+high_param_valid = []
+high_param_real = []
+
+for i in range(len(np.array(num_params)[eval_arch_list])):
+    if np.array(num_params)[eval_arch_list][i] > float(high_param_val):
+        high_param.append(np.array(num_params)[eval_arch_list][i])
+        high_param_valid.append(np.array(valid_accs)[i])
+        high_param_real.append(np.array(cifar10_accs)[eval_arch_list][i])
+
+print(f'high_param_kendal: {stats.kendalltau(high_param_real, high_param_valid)}')    
+
+writer.add_scalar('Kendall_320/low_param_kendal', stats.kendalltau(low_param_valid, low_param_real)[0], total_iter)
+writer.add_scalar('Kendall_320/high_param_kendal', stats.kendalltau(high_param_real, high_param_valid)[0], total_iter)
+
     
 
 

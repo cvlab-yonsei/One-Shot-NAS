@@ -20,7 +20,7 @@ class TinyNetworkRANDOM(nn.Module):
         self._layerN = N
         self.max_nodes = max_nodes
         self.stem = nn.Sequential(
-            nn.Conv2d(3, C, kernel_size=3, padding=1, bias=False), nn.BatchNorm2d(C)
+            nn.Conv2d(3, C, kernel_size=3, padding=1, bias=False), nn.BatchNorm2d(C, track_running_stats = track_running_stats)
         )
 
         layer_channels = [C] * N + [C * 2] + [C * 2] * N + [C * 4] + [C * 4] * N
@@ -32,7 +32,7 @@ class TinyNetworkRANDOM(nn.Module):
             zip(layer_channels, layer_reductions)
         ):
             if reduction:
-                cell = ResNetBasicblock(C_prev, C_curr, 2)
+                cell = ResNetBasicblock(C_prev, C_curr, 2, track_running_stats = track_running_stats)
             else:
                 cell = SearchCell(
                     C_prev,
@@ -54,10 +54,12 @@ class TinyNetworkRANDOM(nn.Module):
         self.op_names = deepcopy(search_space)
         self._Layer = len(self.cells)
         self.edge2index = edge2index
-        self.lastact = nn.Sequential(nn.BatchNorm2d(C_prev), nn.ReLU(inplace=True))
+        self.lastact = nn.Sequential(nn.BatchNorm2d(C_prev, track_running_stats = track_running_stats), nn.ReLU(inplace=True))
         self.global_pooling = nn.AdaptiveAvgPool2d(1)
         self.classifier = nn.Linear(C_prev, num_classes)
         self.arch_cache = None
+        self.net_type = 'subnet'
+        
 
     def get_message(self):
         string = self.extra_repr()
@@ -91,7 +93,17 @@ class TinyNetworkRANDOM(nn.Module):
         feature = self.stem(inputs)
         for i, cell in enumerate(self.cells):
             if isinstance(cell, SearchCell):
-                feature = cell.forward_dynamic(feature, self.arch_cache)
+                if self.net_type == 'subnet':
+                    feature = cell.forward_dynamic(feature, self.arch_cache)
+                    
+                elif self.net_type == 'supernet':
+                    alpha = torch.ones(6,5)/5
+                    feature = cell(feature, alpha)
+                    
+                    
+                else:
+                    raise Exception('Net type should be rather subnet or supernet')
+                    
             else:
                 feature = cell(feature)
 

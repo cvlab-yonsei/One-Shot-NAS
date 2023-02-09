@@ -84,7 +84,7 @@ search_loader, _, valid_loader = get_nas_search_loaders(
 
 search_model = get_cell_based_tiny_net(model_config)
 
-struc = []
+struc = [] #archictecture tensor of 15625 networks.
 base = torch.zeros(6,5)
 for i in range(5):   
     base[0,i] = 1
@@ -176,8 +176,8 @@ class EvolutionSearcher(object):
         self.epoch = 0
         self.candidates = []
 
-        self.nr_layer = 6
-        self.nr_state = 5
+        self.nr_layer = 6 # number of edges
+        self.nr_state = 5 # number of operations
 
     def save_checkpoint(self):
         if not os.path.exists(self.log_dir):
@@ -267,7 +267,7 @@ class EvolutionSearcher(object):
         print('load checkpoint from', self.checkpoint_name)
         return True
     
-    def to_struc(self, tup):
+    def to_struc(self, tup): # cand --> struc
         tensor = torch.zeros(self.nr_layer, self.nr_state)
         for i, val in enumerate(tup):
             tensor[i, val-1] = 1
